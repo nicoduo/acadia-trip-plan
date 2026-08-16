@@ -1,6 +1,7 @@
 # Handoff — Acadia trip plan site
 
-Context for continuing this work in Claude Code. Written 16 Aug 2026.
+Context for continuing this work in Claude Code. Written 16 Aug 2026, revised the same evening
+after the repo was pushed.
 
 ## What this is
 
@@ -10,7 +11,7 @@ for two adults and a three-year-old. It exists in two places:
 1. A **Cowork artifact** (`acadia-toddler-oct-2026`) — the private version, with booking details.
 2. A **deployable repo** — the public version, booking details stripped.
 
-The immediate task is getting the repo onto GitHub and deployed to Railway.
+The repo is now on GitHub. The remaining task is deploying it to Railway.
 
 ---
 
@@ -20,20 +21,41 @@ The immediate task is getting the repo onto GitHub and deployed to Railway.
 |---|---|
 | `index.html` (public, scrubbed) | Done, smoke-tested |
 | `server.js`, `package.json`, `railway.json`, README, `.gitignore` | Done |
-| Local git repo, one commit on `main` | Done — never pushed |
-| GitHub repo `nsacheri/acadia-trip-plan` | **Blocked / not created** |
+| Local git repo, two commits on `main` | Done |
+| GitHub repo [`nicoduo/acadia-trip-plan`](https://github.com/nicoduo/acadia-trip-plan) | **Done** — public, pushed 16 Aug 2026 |
 | Railway project | Created, empty, waiting |
-| Railway service + deploy + domain | **Not started** — needs the repo |
+| Railway service + deploy + domain | **Not started** |
 
-### The GitHub blocker
+### The GitHub blocker — resolved, and the original diagnosis was wrong
 
-The Cowork sandbox routes git through a proxy that only injects credentials for repos in the
-session's authorized set. `nsacheri/acadia-trip-plan` is not in it, and no `add_repo` tool was
-available. Both `api.github.com` writes and `git push` return 403. **This is a sandbox boundary,
-not an account permission problem** — from a normal Claude Code session with the user's own
-`gh` auth, this should just work.
+The earlier version of this doc blamed the 403s on the Cowork sandbox's git proxy and predicted
+that a normal Claude Code session with the user's own `gh` auth would "just work". **That was
+wrong, and it would have sent the next session down the same dead end.**
 
-Verify first: `gh auth status` and `gh repo view nsacheri/acadia-trip-plan`.
+The real cause: the local `gh` is authenticated as **`nicoduo`** (member of the `duolingo` org).
+**`nsacheri` is a separate personal GitHub user account**, not an org and not something `nicoduo`
+can create repos under. `gh repo create nsacheri/…` fails from a normal machine too — different
+error, same wall. The sandbox proxy may also have been a factor, but it was never the only one.
+
+Resolved by creating the repo under the authenticated account instead:
+
+```
+gh repo create nicoduo/acadia-trip-plan --public --source=. --push
+```
+
+Note this puts a personal trip page on the Duolingo-associated GitHub account. Consistent with
+Railway (also nico@duolingo.com), but worth a conscious re-decision if the site outlives the trip.
+To move it to `nsacheri` later, authenticate as that account (`gh auth login`) and re-push, or
+transfer the repo from GitHub's settings page.
+
+### Verified on a real machine, 16 Aug 2026
+
+Re-checked outside the sandbox rather than trusted from the earlier notes:
+
+- **Scrub is clean.** No `N8M8VW`, no `24D/E/F` or `26D`, no first names, no `mail.google.com`
+  anywhere in `index.html`.
+- **Server works.** `/` → 200 (207,892 bytes), `/healthz` → 200, gzip → 61,457 bytes.
+- Node v26.5.1, Railway CLI 5.31.0, both present locally.
 
 ### Railway identifiers
 
@@ -44,20 +66,29 @@ environment 5d9cf4b0-4150-4561-ba1d-0c1bfeff1aaf   (production)
 account     nicoduo / nico@duolingo.com
 ```
 
-Railway MCP connector is connected. The deploy path is `create-deployment` with
-`repo: "nsacheri/acadia-trip-plan"`, `branch: "main"`, then `generate-domain`.
-Railway needs GitHub access to the repo before it can pull — if the user granted only selected
-repos, this one must be added.
+**The Railway MCP connector is not available in a plain Claude Code session** — it was a Cowork
+connector. Don't plan around `create-deployment` / `generate-domain` / `get-logs` unless you can
+confirm those tools are actually loaded. The Railway **CLI** is installed locally (5.31.0, logged
+in as nico@duolingo.com) and covers the same ground.
+
+Two deploy paths, pick one:
+
+- **From GitHub** (keeps push-to-redeploy): connect `nicoduo/acadia-trip-plan` to the project in
+  the Railway dashboard. If the GitHub app was granted only selected repos, add this one.
+- **From local** (fastest, no GitHub coupling): `railway link` to project
+  `68e67fc9-b088-49d4-8d18-5fcf0bd3f76f`, then `railway up`.
 
 ---
 
 ## Next steps, in order
 
-1. `gh repo create nsacheri/acadia-trip-plan --public --source=. --push` from the repo directory.
-   The commit is already made, on `main`, authored as Nico with Claude co-authored.
-2. Confirm Railway has GitHub access to the repo.
-3. Railway MCP: `create-deployment` → poll `get-status` / `list-deployments` → `generate-domain`.
-4. If the build fails, `get-logs` with `types: ["build","deploy"]`.
+1. ~~Create the GitHub repo~~ — **done**, `nicoduo/acadia-trip-plan`, public.
+2. Link the Railway project: `railway link` (workspace/project/environment IDs above).
+3. Deploy — `railway up` from the repo directory, or connect the GitHub repo in the dashboard.
+4. Generate a public domain, then load it and confirm the CARTO basemap tiles render. Tiles were
+   blocked in the Cowork sandbox and have **never been seen working** — this is the one piece the
+   local smoke test cannot cover. Fallback if they fail is in "Repo layout and why" below.
+5. If the build fails, `railway logs --build`.
 
 ---
 
