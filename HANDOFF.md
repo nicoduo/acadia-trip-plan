@@ -11,7 +11,9 @@ for two adults and a three-year-old. It exists in two places:
 1. A **Cowork artifact** (`acadia-toddler-oct-2026`) — the private version, with booking details.
 2. A **deployable repo** — the public version, booking details stripped.
 
-The repo is now on GitHub. The remaining task is deploying it to Railway.
+**The site is live: https://acadia-trip-plan-production.up.railway.app**
+
+Repo on GitHub, deployed to Railway, tiles confirmed rendering. Nothing is blocking.
 
 ---
 
@@ -23,8 +25,8 @@ The repo is now on GitHub. The remaining task is deploying it to Railway.
 | `server.js`, `package.json`, `railway.json`, README, `.gitignore` | Done |
 | Local git repo, two commits on `main` | Done |
 | GitHub repo [`nicoduo/acadia-trip-plan`](https://github.com/nicoduo/acadia-trip-plan) | **Done** — public, pushed 16 Aug 2026 |
-| Railway project | Created, empty, waiting |
-| Railway service + deploy + domain | **Not started** |
+| Railway project | Linked (`railway link -p 68e67fc9… -e 5d9cf4b0…`) |
+| Railway service + deploy + domain | **Done** — service `acadia-trip-plan` ● Online, domain generated |
 
 ### The GitHub blocker — resolved, and the original diagnosis was wrong
 
@@ -57,6 +59,17 @@ Re-checked outside the sandbox rather than trusted from the earlier notes:
 - **Server works.** `/` → 200 (207,892 bytes), `/healthz` → 200, gzip → 61,457 bytes.
 - Node v26.5.1, Railway CLI 5.31.0, both present locally.
 
+And again against production once deployed:
+
+- `/healthz` → 200, `/` → 200 in 0.3 s, **byte-identical to local** (207,892 raw / 61,457 gzipped).
+- Security headers survive the proxy: `x-content-type-options: nosniff`, `referrer-policy:
+  no-referrer`, `cache-control: public, max-age=300`, ETag intact. HTTP/2 via `railway-hikari`.
+- **CARTO basemap tiles render — the long-standing unknown is closed.** 12/12 tiles fetched from
+  `basemaps.cartocdn.com` and decoded at 512×512, 23 markers placed, Leaflet 1.9.4. The
+  `@geo-maps` offline fallback documented below is **not needed**; leave it as insurance only.
+- Scrub re-verified on the live page: header reads "two adults and a three-year-old", no names,
+  no confirmation code.
+
 ### Railway identifiers
 
 ```
@@ -82,13 +95,27 @@ Two deploy paths, pick one:
 
 ## Next steps, in order
 
-1. ~~Create the GitHub repo~~ — **done**, `nicoduo/acadia-trip-plan`, public.
-2. Link the Railway project: `railway link` (workspace/project/environment IDs above).
-3. Deploy — `railway up` from the repo directory, or connect the GitHub repo in the dashboard.
-4. Generate a public domain, then load it and confirm the CARTO basemap tiles render. Tiles were
-   blocked in the Cowork sandbox and have **never been seen working** — this is the one piece the
-   local smoke test cannot cover. Fallback if they fail is in "Repo layout and why" below.
-5. If the build fails, `railway logs --build`.
+Deployment is finished. All of the following are done:
+
+1. ~~Create the GitHub repo~~ — `nicoduo/acadia-trip-plan`, public.
+2. ~~Link the Railway project~~ — production environment.
+3. ~~Deploy~~ — `railway up --ci -y`. Nixpacks, Node, zero deps, ~90 s. The
+   `UndefinedVar: $NIXPACKS_PATH` line in the build log is a **Nixpacks base-image warning, not an
+   error** — it appears on every build and the deploy succeeds regardless. Don't chase it.
+4. ~~Generate a domain and confirm tiles render~~ — both good, see above.
+
+**Redeploy** after editing `index.html`: `railway up --ci -y` from the repo directory. The GitHub
+repo is *not* wired to Railway as a deploy source — pushing to `main` alone will **not** redeploy.
+Either always deploy via the CLI, or connect the repo in the Railway dashboard to get
+push-to-deploy. Right now git and the live site can drift apart silently; that's the one trap left.
+
+If a future build fails: `railway logs --build`.
+
+### Left deliberately undone
+
+- **`railway setup agent`** — the CLI suggests installing Railway's MCP server and skills into the
+  session. Not run; it changes local agent config and nothing here needed it.
+- **CLI upgrade** — 5.31.0 installed, 5.41.2 available. Not upgraded mid-deploy.
 
 ---
 
