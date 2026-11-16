@@ -1,20 +1,34 @@
 'use strict';
 
-// Minimal zero-dependency static server for the Acadia trip plan.
+// Minimal zero-dependency static server for the Acadia trip plan and the piñata-drop game.
 // Railway (and most PaaS) inject PORT; default to 3000 for local runs.
 
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
+const crypto = require('crypto');
 
 const PORT = process.env.PORT || 3000;
-const FILE = path.join(__dirname, 'index.html');
 
-// Read once at boot — the page is static, and this keeps responses fast.
-const html = fs.readFileSync(FILE);
-const gzipped = zlib.gzipSync(html, { level: zlib.constants.Z_BEST_COMPRESSION });
-const etag = '"' + require('crypto').createHash('sha1').update(html).digest('hex').slice(0, 16) + '"';
+// Pages are read once at boot and pre-gzipped — both are static.
+function load(file) {
+  const raw = fs.readFileSync(path.join(__dirname, file));
+  return {
+    raw,
+    gzipped: zlib.gzipSync(raw, { level: zlib.constants.Z_BEST_COMPRESSION }),
+    etag: '"' + crypto.createHash('sha1').update(raw).digest('hex').slice(0, 16) + '"',
+  };
+}
+const plan = load('index.html');
+const pinata = load('pinata.html');
+
+// Route table. Anything unlisted resolves to the plan, as before.
+const routes = {
+  '/pinata': pinata,
+  '/pinata.html': pinata,
+  '/pinata/': pinata,
+};
 
 const server = http.createServer((req, res) => {
   const url = (req.url || '/').split('?')[0];
@@ -29,20 +43,21 @@ const server = http.createServer((req, res) => {
     return res.end();
   }
 
-  // Single-page site: everything resolves to the plan.
-  if (req.headers['if-none-match'] === etag) {
+  const page = routes[url] || plan;
+
+  if (req.headers['if-none-match'] === page.etag) {
     res.writeHead(304);
     return res.end();
   }
 
   const acceptsGzip = /\bgzip\b/.test(req.headers['accept-encoding'] || '');
-  const body = acceptsGzip ? gzipped : html;
+  const body = acceptsGzip ? page.gzipped : page.raw;
 
   const headers = {
     'Content-Type': 'text/html; charset=utf-8',
     'Content-Length': body.length,
     'Cache-Control': 'public, max-age=300',
-    ETag: etag,
+    ETag: page.etag,
     'X-Content-Type-Options': 'nosniff',
     'Referrer-Policy': 'no-referrer',
   };
