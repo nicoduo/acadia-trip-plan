@@ -27,23 +27,9 @@ plan treats those as the whole trip rather than pretending it's a long weekend.
 npm start          # http://localhost:3000
 ```
 
-No dependencies. `server.js` is a ~70-line Node http server that reads `index.html` and
-`pinata.html` once at boot, pre-gzips them, and serves them with ETags. `index.html` is fully self-contained —
+No dependencies. `server.js` is a ~50-line Node http server that reads `index.html` once at
+boot, pre-gzips it, and serves it with an ETag. `index.html` is fully self-contained —
 Leaflet is inlined, so the only network request at view time is for map background tiles.
-
-## Piñata drop game
-
-`pinata.html`, served at **`/pinata`**, is a small browser game that shares nothing with the plan
-except the server. You fly a Piper Cherokee seen from above at 400 ft and 100 knots, steer with the
-arrow keys (or drag on a phone), and press space (or tap) to drop a piñata on a bullseye. The piñata
-keeps the aircraft's forward speed, so you have to let go early. Once it is falling the camera follows
-it down and you **blow into the microphone** to push it the last few metres; without a mic, holding
-space or the screen does the same. Three targets per flight, points by distance from the centre,
-top-ten leaderboard kept in `localStorage`.
-
-The microphone needs a secure context, so it works on the Railway URL and on `localhost`, but not
-over plain http from another machine. Everything is one file with no dependencies; the physics
-constants sit at the top of the script under `CFG`.
 
 ## Deploying
 
